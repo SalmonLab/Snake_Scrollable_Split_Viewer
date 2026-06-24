@@ -7,16 +7,18 @@
 
   const state = {
     active: false,
-    columns: 2,
     scrollBase: 0,
-    viewportHeight: 0,
     maxBaseScroll: 0,
-    panes: [],
+    viewportHeight: 0,
+    root: null,
+    primaryScroller: null,
+    leftInner: null,
+    rightInner: null,
+    styleEl: null,
     wheelHandler: null,
     resizeHandler: null,
-    styleEl: null,
-    primaryScroller: null,
-    syncingFromPrimary: false,
+    scrollHandler: null,
+    syncFromPrimary: false,
     savedBodyHTML: "",
     savedBodyClassName: "",
     savedBodyStyle: "",
@@ -32,29 +34,23 @@
 
     const styleEl = document.createElement("style");
     styleEl.id = STYLE_ID;
-    document.documentElement.appendChild(styleEl);
     styleEl.textContent = `
-      html, body {
-        margin: 0 !important;
-      }
-
       .${ROOT_CLASS} {
         position: fixed !important;
         inset: 0 !important;
         width: 100vw !important;
         height: 100vh !important;
         display: flex !important;
-        align-items: stretch !important;
         box-sizing: border-box !important;
-        padding: 0 ${SIDE_PADDING_PX}px !important;
         gap: ${SEPARATOR_PX}px !important;
+        padding: 0 ${SIDE_PADDING_PX}px !important;
         overflow: hidden !important;
-        background: transparent !important;
       }
 
       .${BODY_CLASS} {
         width: 100vw !important;
         height: 100vh !important;
+        margin: 0 !important;
         overflow: hidden !important;
         padding: 0 !important;
       }
@@ -71,36 +67,36 @@
         width: ${SEPARATOR_PX}px !important;
         min-width: ${SEPARATOR_PX}px !important;
         max-width: ${SEPARATOR_PX}px !important;
-        align-self: stretch !important;
         background: rgba(148, 163, 184, 0.35) !important;
+        align-self: stretch !important;
       }
 
       .${ROOT_CLASS} .splitstream-scroll {
         position: relative !important;
         width: 100% !important;
         height: 100% !important;
-        overflow-y: auto !important;
         overflow-x: hidden !important;
+        overflow-y: auto !important;
         box-sizing: border-box !important;
       }
 
-      .${ROOT_CLASS} .splitstream-scroll:not(.splitstream-scroll-primary) {
+      .${ROOT_CLASS} .splitstream-scroll-right {
         overflow-y: hidden !important;
-        overflow-x: hidden !important;
         pointer-events: none !important;
+        scrollbar-width: none !important;
       }
 
-      .${ROOT_CLASS} .splitstream-scroll:not(.splitstream-scroll-primary)::-webkit-scrollbar {
+      .${ROOT_CLASS} .splitstream-scroll-right::-webkit-scrollbar {
         width: 0 !important;
         height: 0 !important;
       }
 
-      .${ROOT_CLASS} .splitstream-scroll-primary::-webkit-scrollbar {
+      .${ROOT_CLASS} .splitstream-scroll::-webkit-scrollbar {
         width: 8px !important;
         height: 8px !important;
       }
 
-      .${ROOT_CLASS} .splitstream-scroll-primary {
+      .${ROOT_CLASS} .splitstream-scroll {
         scrollbar-width: thin !important;
       }
 
@@ -113,30 +109,20 @@
         will-change: transform !important;
       }
 
-      .${ROOT_CLASS} .splitstream-pane-clone {
+      .${ROOT_CLASS} .splitstream-clone-root {
         width: 100% !important;
         min-width: 0 !important;
-        max-width: 100% !important;
         margin: 0 !important;
         padding: 0 !important;
         box-sizing: border-box !important;
       }
 
-      .${ROOT_CLASS} .splitstream-pane-clone img,
-      .${ROOT_CLASS} .splitstream-pane-clone video,
-      .${ROOT_CLASS} .splitstream-pane-clone iframe,
-      .${ROOT_CLASS} .splitstream-pane-clone canvas {
+      .${ROOT_CLASS} .splitstream-clone-root * {
         max-width: 100% !important;
-        height: auto !important;
-      }
-
-      .${ROOT_CLASS} .splitstream-pane-clone * {
-        max-width: 100% !important;
-        width: auto !important;
-        min-width: 0 !important;
         box-sizing: border-box !important;
       }
     `;
+    document.documentElement.appendChild(styleEl);
     state.styleEl = styleEl;
   }
 
@@ -151,30 +137,15 @@
     blocked.forEach((item) => item.remove());
   }
 
-  function createClonedContent() {
-    const clone = document.createElement("div");
-    clone.className = "splitstream-pane-clone";
-
-    const bodyAttributes = document.body.attributes;
-    for (let i = 0; i < bodyAttributes.length; i++) {
-      const attr = bodyAttributes[i];
-      if (attr.name === "class") {
-        if (document.body.className) {
-          clone.className = `${clone.className} ${document.body.className}`;
-        }
-      } else if (attr.name !== "id") {
-        clone.setAttribute(attr.name, attr.value);
-      }
-    }
-
-    clone.setAttribute("style", "margin:0 !important;padding:0 !important;display:block !important;");
-
-    Array.from(document.body.childNodes).forEach((node) => {
-      clone.appendChild(node.cloneNode(true));
+  function createCloneFragment() {
+    const fragment = document.createElement("div");
+    fragment.className = "splitstream-clone-root";
+    const children = Array.from(document.body.childNodes);
+    children.forEach((node) => {
+      fragment.appendChild(node.cloneNode(true));
     });
-
-    removeBlockedNodes(clone);
-    return clone;
+    removeBlockedNodes(fragment);
+    return fragment;
   }
 
   function createColumn(index) {
@@ -182,20 +153,25 @@
     column.className = "splitstream-column";
 
     const scroller = document.createElement("div");
-    scroller.className = "splitstream-scroll";
-    if (index === 0) {
-      scroller.className += " splitstream-scroll-primary";
-    }
-    scroller.setAttribute("data-splitstream-column", String(index));
+    scroller.className = index === 0
+      ? "splitstream-scroll splitstream-scroll-left"
+      : "splitstream-scroll splitstream-scroll-right";
 
     const inner = document.createElement("div");
     inner.className = "splitstream-pane-inner";
-    inner.appendChild(createClonedContent());
+    inner.appendChild(createCloneFragment());
 
     scroller.appendChild(inner);
     column.appendChild(scroller);
 
-    state.panes.push({ column, scroller, inner, index });
+    if (index === 0) {
+      state.leftInner = inner;
+      state.primaryScroller = scroller;
+      state.scrollHandler = onPrimaryScroll;
+    } else {
+      state.rightInner = inner;
+    }
+
     return column;
   }
 
@@ -205,57 +181,63 @@
     const clamped = clamp(state.scrollBase, 0, state.maxBaseScroll);
     state.scrollBase = clamped;
 
-    state.panes.forEach((pane) => {
-      const targetOffset = pane.index === 0 ? 0 : -(state.scrollBase + pane.index * state.viewportHeight);
-      pane.inner.style.transform = `translateY(${targetOffset}px)`;
-    });
-
-    if (!state.syncingFromPrimary) {
+    if (!state.syncFromPrimary) {
       state.primaryScroller.scrollTop = clamped;
+    }
+
+    if (state.leftInner) {
+      state.leftInner.style.transform = "translateY(0px)";
+    }
+
+    if (state.rightInner) {
+      const offset = -(state.scrollBase + state.viewportHeight);
+      state.rightInner.style.transform = `translateY(${offset}px)`;
     }
   }
 
   function onPrimaryScroll() {
-    if (!state.active || !state.primaryScroller || state.syncingFromPrimary) return;
-
-    const next = clamp(state.primaryScroller.scrollTop, 0, state.maxBaseScroll);
-    if (next === state.scrollBase) return;
-
-    state.scrollBase = next;
-    state.syncingFromPrimary = true;
-    applySyncedScroll();
-    state.syncingFromPrimary = false;
+    if (!state.active || !state.primaryScroller || state.syncFromPrimary) return;
+    state.syncFromPrimary = true;
+    const next = clamp(
+      state.primaryScroller.scrollTop,
+      0,
+      state.maxBaseScroll
+    );
+    if (next !== state.scrollBase) {
+      state.scrollBase = next;
+      applySyncedScroll();
+    }
+    state.syncFromPrimary = false;
   }
 
   function onWheel(event) {
     if (!state.active || !state.primaryScroller) return;
-    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     if (!event.deltaY) return;
 
     event.preventDefault();
+
     const next = clamp(
       state.primaryScroller.scrollTop + event.deltaY,
       0,
       state.maxBaseScroll
     );
-    state.primaryScroller.scrollTop = next;
-    onPrimaryScroll();
+    if (next !== state.scrollBase) {
+      state.scrollBase = next;
+      applySyncedScroll();
+    }
   }
 
-  function clampBaseScroll() {
-    if (!state.primaryScroller) {
-      state.maxBaseScroll = 0;
-      state.scrollBase = 0;
-      return;
-    }
-
-    const contentMax = Math.max(0, state.primaryScroller.scrollHeight - state.primaryScroller.clientHeight);
-    state.maxBaseScroll = clamp(contentMax, 0, contentMax);
+  function updateGeometry() {
+    if (!state.active || !state.primaryScroller) return;
+    state.viewportHeight = state.primaryScroller.clientHeight;
+    state.maxBaseScroll = Math.max(0, state.primaryScroller.scrollHeight - state.primaryScroller.clientHeight);
     state.scrollBase = clamp(state.scrollBase, 0, state.maxBaseScroll);
     state.primaryScroller.scrollTop = clamp(state.primaryScroller.scrollTop, 0, state.maxBaseScroll);
+    applySyncedScroll();
   }
 
-  function activateSyncHandlers() {
+  function activateHandlers() {
     if (state.wheelHandler) {
       window.removeEventListener("wheel", state.wheelHandler, { capture: true });
     }
@@ -266,42 +248,48 @@
     state.wheelHandler = onWheel;
     window.addEventListener("wheel", state.wheelHandler, { capture: true, passive: false });
 
-    state.resizeHandler = () => updateGeometry();
+    state.resizeHandler = () => {
+      requestAnimationFrame(updateGeometry);
+    };
     window.addEventListener("resize", state.resizeHandler);
-  }
 
-  function removeSyncHandlers() {
     if (state.primaryScroller) {
       state.primaryScroller.removeEventListener("scroll", onPrimaryScroll);
-      state.primaryScroller = null;
+      state.primaryScroller.addEventListener("scroll", onPrimaryScroll, { passive: true });
+    }
+  }
+
+  function removeHandlers() {
+    if (state.primaryScroller) {
+      state.primaryScroller.removeEventListener("scroll", onPrimaryScroll);
     }
     if (state.wheelHandler) {
       window.removeEventListener("wheel", state.wheelHandler, { capture: true });
-      state.wheelHandler = null;
     }
     if (state.resizeHandler) {
       window.removeEventListener("resize", state.resizeHandler);
-      state.resizeHandler = null;
     }
+
+    state.wheelHandler = null;
+    state.resizeHandler = null;
+    state.scrollHandler = null;
+    state.primaryScroller = null;
+    state.leftInner = null;
+    state.rightInner = null;
   }
 
   function clearSplit() {
-    removeSyncHandlers();
+    removeHandlers();
     removeStyle();
 
     if (!state.active) {
-      state.panes = [];
+      state.active = false;
       state.maxBaseScroll = 0;
       state.viewportHeight = 0;
       state.scrollBase = 0;
+      state.root = null;
       return;
     }
-
-    state.panes = [];
-    state.scrollBase = 0;
-    state.viewportHeight = 0;
-    state.maxBaseScroll = 0;
-    state.active = false;
 
     const body = document.body;
     if (body) {
@@ -314,18 +302,15 @@
         body.removeAttribute("style");
       }
     }
+
+    state.active = false;
+    state.root = null;
+    state.maxBaseScroll = 0;
+    state.viewportHeight = 0;
+    state.scrollBase = 0;
   }
 
-  function updateGeometry() {
-    if (!state.active || !state.primaryScroller) return;
-    state.viewportHeight = window.innerHeight;
-    clampBaseScroll();
-    state.syncingFromPrimary = true;
-    applySyncedScroll();
-    state.syncingFromPrimary = false;
-  }
-
-  function applySplit(columns) {
+  function applySplit() {
     const body = document.body;
     if (!body) return;
 
@@ -336,68 +321,65 @@
     if (state.active) {
       clearSplit();
     } else {
-      removeSyncHandlers();
+      removeHandlers();
       removeStyle();
-      state.panes = [];
-      state.maxBaseScroll = 0;
-      state.scrollBase = 0;
-      state.viewportHeight = 0;
     }
 
     state.savedBodyHTML = originalHTML;
     state.savedBodyClassName = originalClass;
     state.savedBodyStyle = originalStyle;
 
-    state.columns = Number(columns) || 2;
+    setStyle();
+
+    body.classList.add(BODY_CLASS);
     state.active = true;
     state.scrollBase = 0;
+    state.maxBaseScroll = 0;
+    state.viewportHeight = 0;
 
-    setStyle();
-    body.classList.add(BODY_CLASS);
+    const root = document.createElement("div");
+    root.className = ROOT_CLASS;
+    root.appendChild(createColumn(0));
 
-    const container = document.createElement("div");
-    container.className = ROOT_CLASS;
+    const separator = document.createElement("div");
+    separator.className = "splitstream-separator";
+    root.appendChild(separator);
 
-    for (let i = 0; i < state.columns; i++) {
-      if (i > 0) {
-        const separator = document.createElement("div");
-        separator.className = "splitstream-separator";
-        container.appendChild(separator);
-      }
-      container.appendChild(createColumn(i));
-    }
+    root.appendChild(createColumn(1));
 
     body.innerHTML = "";
-    body.appendChild(container);
+    body.appendChild(root);
+    state.root = root;
 
     requestAnimationFrame(() => {
-      state.primaryScroller = container.querySelector(`.splitstream-scroll-primary`);
-      if (state.primaryScroller) {
-        state.primaryScroller.scrollTop = 0;
-        state.primaryScroller.addEventListener("scroll", onPrimaryScroll, { passive: true });
-      }
+      if (!state.primaryScroller) return;
+      activateHandlers();
+      state.primaryScroller.scrollTop = 0;
       updateGeometry();
-      activateSyncHandlers();
     });
   }
 
-  chrome.runtime.sendMessage({ type: "get-columns" }, (response) => {
-    const columns = response && Number(response.columns) ? Number(response.columns) : 2;
-    if (columns === 1) {
+  function initFromSettings() {
+    chrome.runtime.sendMessage({ type: "get-columns" }, (response) => {
+      const columns = response && Number(response.columns) === 2 ? 2 : 1;
+      if (columns !== 2) {
+        clearSplit();
+        return;
+      }
+      applySplit();
+    });
+  }
+
+  chrome.runtime.onMessage.addListener((message) => {
+    if (!message || message.type !== "apply-columns") return;
+
+    if (!message.shouldApply || Number(message.columns) !== 2) {
       clearSplit();
       return;
     }
-    applySplit(columns);
+
+    applySplit();
   });
 
-  chrome.runtime.onMessage.addListener((message) => {
-    if (!message || !message.type) return;
-    if (message.type === "apply-columns") {
-      if (!message.shouldApply || message.columns === 1) {
-        clearSplit();
-      } else {
-        applySplit(message.columns);
-      }
-    }
-  });
+  initFromSettings();
 })();
