@@ -145,6 +145,32 @@
     });
   }
 
+  function createClonedContent() {
+    const clone = document.createElement("div");
+    clone.className = "splitstream-cloned-body";
+
+    const bodyAttributes = document.body.attributes;
+    for (let i = 0; i < bodyAttributes.length; i++) {
+      const attr = bodyAttributes[i];
+      if (attr.name === "class") {
+        if (document.body.className) {
+          clone.className = `${clone.className} ${document.body.className}`;
+        }
+      } else if (attr.name !== "id") {
+        clone.setAttribute(attr.name, attr.value);
+      }
+    }
+
+    clone.setAttribute("style", "margin:0 !important;padding:0 !important;");
+
+    Array.from(document.body.childNodes).forEach((node) => {
+      clone.appendChild(node.cloneNode(true));
+    });
+
+    removeBlockedNodes(clone);
+    return clone;
+  }
+
   function createColumn(index) {
     const column = document.createElement("div");
     column.className = "splitstream-column";
@@ -156,20 +182,11 @@
     }
     scroller.setAttribute("data-splitstream-column", String(index));
 
-    const clone = document.body.cloneNode(true);
-    removeBlockedNodes(clone);
-    clone.setAttribute("style", "margin:0 !important;padding:0 !important;");
+    const clone = createClonedContent();
     const inner = document.createElement("div");
     inner.className = "splitstream-pane-inner";
     inner.appendChild(clone);
-    if (index === 0) {
-      const spacer = document.createElement("div");
-      spacer.className = "splitstream-tail-space";
-      inner.appendChild(spacer);
-      state.panes.push({ column, scroller, inner, spacer });
-    } else {
-      state.panes.push({ column, scroller, inner, spacer: null });
-    }
+    state.panes.push({ column, scroller, inner });
     scroller.appendChild(inner);
     column.appendChild(scroller);
 
@@ -187,10 +204,7 @@
   }
 
   function clampBaseScroll() {
-    const maxScroll = Math.max(
-      0,
-      state.singleMaxScroll + (state.columns - 1) * state.viewportHeight
-    );
+    const maxScroll = Math.max(0, state.singleMaxScroll);
     state.maxBaseScroll = clamp(state.maxBaseScroll, 0, maxScroll);
     state.scrollBase = clamp(state.scrollBase, 0, maxScroll);
     if (state.maxBaseScroll !== maxScroll) {
@@ -219,12 +233,9 @@
     state.viewportHeight = window.innerHeight;
     state.singleMaxScroll = 0;
     if (!state.panes.length || !state.panes[0].inner) return;
-    const ref = state.panes[0].inner.firstElementChild;
+    const ref = state.panes[0].inner.lastElementChild;
     if (!ref) return;
     state.singleMaxScroll = Math.max(0, ref.scrollHeight - state.viewportHeight);
-    if (state.panes[0].spacer) {
-      state.panes[0].spacer.style.height = `${Math.max(0, (state.columns - 1) * state.viewportHeight)}px`;
-    }
     clampBaseScroll();
     applySyncedScroll();
   }
@@ -375,10 +386,7 @@
     }
     state.viewportHeight = window.innerHeight;
     state.singleMaxScroll = Math.max(0, reference.firstElementChild.scrollHeight - state.viewportHeight);
-    state.maxBaseScroll = Math.max(
-      0,
-      state.singleMaxScroll + (state.columns - 1) * state.viewportHeight
-    );
+    state.maxBaseScroll = Math.max(0, state.singleMaxScroll);
     applySyncedScroll();
   }
 
