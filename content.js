@@ -159,11 +159,7 @@
     const bodyAttributes = document.body.attributes;
     for (let i = 0; i < bodyAttributes.length; i++) {
       const attr = bodyAttributes[i];
-      if (attr.name === "class") {
-        if (document.body.className) {
-          clone.className = `${clone.className} ${document.body.className}`;
-        }
-      } else if (attr.name !== "id") {
+      if (attr.name !== "id" && attr.name !== "class") {
         clone.setAttribute(attr.name, attr.value);
       }
     }
@@ -184,7 +180,7 @@
 
     const scroller = document.createElement("div");
     scroller.className = "splitstream-scroll";
-    if (index === 0) {
+    if (index === state.columns - 1) {
       scroller.className += " splitstream-scroll-primary";
     }
     scroller.setAttribute("data-splitstream-column", String(index));
@@ -207,8 +203,15 @@
     state.scrollBase = clamped;
 
     state.panes.forEach((pane) => {
-      const targetOffset = pane.index === 0 ? 0 : -(state.scrollBase + pane.index * state.viewportHeight);
+      const isPrimary = pane.index === (state.columns - 1);
+      const targetOffset =
+        pane.index === 0 && !isPrimary
+          ? -state.scrollBase
+          : -state.scrollBase - pane.index * state.viewportHeight;
       pane.inner.style.transform = `translateY(${targetOffset}px)`;
+      if (isPrimary) {
+        pane.inner.style.transform = `translateY(${-pane.index * state.viewportHeight}px)`;
+      }
     });
 
     if (!state.syncingFromPrimary) {
