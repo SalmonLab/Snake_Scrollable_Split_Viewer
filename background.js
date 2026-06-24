@@ -1,6 +1,6 @@
 const KEY_TAB_SETTINGS = "splitstream_tab_settings";
 
-const DEFAULT_COLUMNS = 2;
+const DEFAULT_COLUMNS = 1;
 const SIDE_PADDING_PX = 30;
 const SEPARATOR_PX = 4;
 
@@ -118,6 +118,32 @@ async function clearTabSetting(tabId) {
   }
 }
 
+async function applyCommandToActiveTab() {
+  const tabs = await new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, resolve);
+  });
+  return tabs && tabs.length ? tabs[0].id : null;
+}
+
+async function applySplitCommand(command) {
+  const tabId = await applyCommandToActiveTab();
+  if (!isValidTabId(tabId)) return;
+
+  if (command === "toggle-split-off") {
+    await clearTabSetting(tabId);
+    return;
+  }
+
+  if (command === "set-split-2") {
+    await updateTabSetting(tabId, 2);
+    return;
+  }
+
+  if (command === "set-split-3") {
+    await updateTabSetting(tabId, 3);
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || message.type !== "set-columns") {
     return;
@@ -178,4 +204,8 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   if (settings[tabId] === undefined) return;
   delete settings[tabId];
   await setStorage({ [KEY_TAB_SETTINGS]: settings });
+});
+
+chrome.commands.onCommand.addListener((command) => {
+  applySplitCommand(command).catch(() => {});
 });

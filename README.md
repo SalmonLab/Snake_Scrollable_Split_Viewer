@@ -1,23 +1,36 @@
-# SplitStream Chrome Extension (PoC)
+# SplitStream Browser Extension (PoC)
 
-この拡張は、開いているページを **1つのスクロールで2列 or 3列** に見せるPoCです。  
-列間は目立たないように4pxで、薄い線（column-rule）を入れています。
+2/3分割で同一ページを縦連結スクロールに見せるChrome拡張です。
+
+## セットアップ
+
+1. このフォルダを任意の場所に置く。
+2. Chrome のアドレス欄で `chrome://extensions` を開く。
+3. 右上の `Developer mode` をONにする。
+4. `Load unpacked` を押し、このフォルダを選択する。
+5. 拡張が読み込めたら、ツールバーの拡張アイコンから有効化。
 
 ## 使い方
 
-1. Chrome の `chrome://extensions` を開く
-2. 開発者モードをON
-3. 「パッケージ化されていない拡張機能を読み込む」からこのリポジトリを選択
-4. ブラウザ右上の拡張アイコンを開き、`2 columns / 3 columns` を選択してApply
+- ポップアップで `off / 2 columns / 3 columns` を選択して適用
+- 短絡のショートカット（未実装の場合は、拡張を再読み込み後に確認）
+  - `Shift+1`: off
+  - `Shift+2`: 2 columns
+  - `Shift+3`: 3 columns
 
-## ファイル構成
+## ワンクリック起動
 
-- `manifest.json`: 拡張設定（MV3）
-- `content.js`: ページへ `column-count` を注入
-- `background.js`: タブごとの列数保持・再読み込み時再適用
-- `popup.html` / `popup.js`: 操作用UI
+```powershell
+./run-splitstream.ps1
+```
 
-## 注意
+既定URLを開いた状態で起動します。
 
-- CSS再構成はページ構造によっては崩れる場合があります
-- 現在はページ全体を `body` に対して分割する方式のため、サイトごとに微調整が必要になることがあります
+## トラブル時
+
+- 拡張が読み込めない場合は、上位にある他の `manifest.json` が混在していない別フォルダでも試してください。
+- `chrome://extensions` で「エラー」を確認し、同一のエラーメッセージを共有してください。
+- まずは `manifest.json` がJSONとして有効かを確認:
+  ```
+  node --eval "JSON.parse(require('fs').readFileSync('manifest.json','utf8')); console.log('ok')"
+  ```

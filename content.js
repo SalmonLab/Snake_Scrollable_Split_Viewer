@@ -443,7 +443,9 @@
   }
 
   chrome.runtime.sendMessage({ type: "get-columns" }, (response) => {
-    const columns = response && Number(response.columns) ? Number(response.columns) : 2;
+    const columns = response && Number.isFinite(Number(response.columns))
+      ? Number(response.columns)
+      : 1;
     if (columns === 1) {
       clearSplit();
       return;
