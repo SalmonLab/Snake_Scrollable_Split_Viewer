@@ -49,3 +49,13 @@ The target behavior is:
 - Add explicit page-level disable and global toggle.
 - Add diagnostics for when a page cannot be safely reflowed.
 - Optional per-site memory: remember user preference per host.
+## Session update (2026-06-24) - note.com verification
+- URL: https://note.com/samuraijuku_biz/n/na1d0a22e3cc3
+- What was validated:
+  - `splitstream-target` now attaches reliably after page init (initial delay tolerated ~2-3s on this page).
+  - `column` styles are applied on `main.p-article` and descendants are forced wide/visible to avoid fixed-width clipping (`width: 100% !important`, `overflow: visible !important`).
+  - Content now becomes multi-column and right-side flow is present in coordinate checks (`p.getClientRects()` length > 1, left positions continue beyond first pane).
+  - Scroll is synchronized to the page (no per-pane scrolling); however this note page still behaves as a horizontally distributed column flow with limited vertical travel.
+  - Current behavior does not yet produce a strict 2x2 snake where "top of right pane follows bottom of left pane" in all cases; this still needs a layout model change if strict snake continuity is required.
+- Open issues to resolve next:
+  - Decide whether to keep CSS multi-column behavior (highlighter-friendly, fast) or switch to a custom snake layout for strict top-to-bottom, pane-to-pane continuity.
