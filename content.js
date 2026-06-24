@@ -204,14 +204,11 @@
 
     state.panes.forEach((pane) => {
       const isPrimary = pane.index === (state.columns - 1);
-      const targetOffset =
-        pane.index === 0 && !isPrimary
-          ? -state.scrollBase
-          : -state.scrollBase - pane.index * state.viewportHeight;
+      const phase = pane.index * state.viewportHeight;
+      const targetOffset = isPrimary
+        ? -phase
+        : -state.scrollBase - phase;
       pane.inner.style.transform = `translateY(${targetOffset}px)`;
-      if (isPrimary) {
-        pane.inner.style.transform = `translateY(${-pane.index * state.viewportHeight}px)`;
-      }
     });
 
     if (!state.syncingFromPrimary) {
@@ -270,7 +267,10 @@
       return;
     }
 
-    const contentMax = Math.max(0, state.primaryScroller.scrollHeight - state.primaryScroller.clientHeight);
+    const contentMax = Math.max(
+      0,
+      state.primaryScroller.scrollHeight - state.primaryScroller.clientHeight - Math.max(1, state.viewportHeight * state.columns) + state.viewportHeight
+    );
     state.maxBaseScroll = clamp(contentMax, 0, contentMax);
     state.scrollBase = clamp(state.scrollBase, 0, state.maxBaseScroll);
     state.primaryScroller.scrollTop = clamp(state.primaryScroller.scrollTop, 0, state.maxBaseScroll);
