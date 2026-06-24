@@ -36,6 +36,13 @@
     return (el.textContent || "").trim().length;
   }
 
+  function hasScrollableCapacity(el) {
+    if (!el) return false;
+    const clientHeight = el.clientHeight || 0;
+    const scrollHeight = el.scrollHeight || 0;
+    return scrollHeight > clientHeight + 1 && clientHeight > 0;
+  }
+
   function isVisible(el) {
     if (!el || !el.getBoundingClientRect) return false;
     const rect = el.getBoundingClientRect();
@@ -147,10 +154,9 @@
 
   function shouldFallback(target) {
     if (!target) return true;
+    if (!target.isConnected) return true;
     if (target === document.body || target === document.documentElement) return false;
-    const lanes = estimateLaneCount(target);
-    if (lanes === 0) return false;
-    if (lanes > activeColumns + 1) return true;
+    if (!hasScrollableCapacity(target)) return true;
     return false;
   }
 
@@ -183,6 +189,9 @@
     if (retargetTimer) clearTimeout(retargetTimer);
     retargetTimer = setTimeout(() => {
       if (mode !== "native") return;
+      if (currentTarget && currentTarget.isConnected && hasScrollableCapacity(currentTarget)) {
+        return;
+      }
       const next = findSplitTarget() || document.body;
       if (!next) return;
       const nextTarget = next.isConnected ? next : document.body;
@@ -262,7 +271,7 @@
 
       .${TAG_CLASS} .${TARGET_CLASS} > * {
         max-width: 100% !important;
-        width: auto !important;
+        width: 100% !important;
         min-width: 0 !important;
         overflow-wrap: anywhere !important;
         box-sizing: border-box !important;
