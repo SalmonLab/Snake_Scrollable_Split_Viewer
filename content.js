@@ -21,6 +21,8 @@
     savedBodyHTML: "",
     savedBodyClassName: "",
     savedBodyStyle: "",
+    applyEpoch: 0,
+    root: null,
   };
 
   function clamp(value, min, max) {
@@ -320,6 +322,10 @@
     removeStyle();
 
     if (!state.active) {
+      if (state.root) {
+        state.root.remove();
+        state.root = null;
+      }
       state.panes = [];
       state.maxBaseScroll = 0;
       state.viewportHeight = 0;
@@ -328,6 +334,8 @@
     }
 
     state.panes = [];
+    state.primaryScroller = null;
+    state.root = null;
     state.scrollBase = 0;
     state.viewportHeight = 0;
     state.maxBaseScroll = 0;
@@ -359,9 +367,26 @@
     const body = document.body;
     if (!body) return;
 
+    const nextColumns = Math.min(3, Math.max(2, Number(columns) || 2));
+
+    if (
+      state.active &&
+      state.columns === nextColumns &&
+      state.panes.length === nextColumns &&
+      state.root &&
+      state.root.isConnected
+    ) {
+      updateGeometry();
+      return;
+    }
+
+    const wasActive = state.active;
+
     const originalHTML = body.innerHTML;
     const originalClass = body.className || "";
     const originalStyle = body.getAttribute("style") || "";
+    const layoutEpoch = ++state.applyEpoch;
+    state.root = null;
 
     if (state.active) {
       clearSplit();
@@ -374,11 +399,13 @@
       state.viewportHeight = 0;
     }
 
-    state.savedBodyHTML = originalHTML;
-    state.savedBodyClassName = originalClass;
-    state.savedBodyStyle = originalStyle;
+    if (!wasActive) {
+      state.savedBodyHTML = originalHTML;
+      state.savedBodyClassName = originalClass;
+      state.savedBodyStyle = originalStyle;
+    }
 
-    state.columns = Number(columns) || 2;
+    state.columns = nextColumns;
     state.active = true;
     state.scrollBase = 0;
 
@@ -399,9 +426,12 @@
 
     body.innerHTML = "";
     body.appendChild(container);
+    state.root = container;
 
     requestAnimationFrame(() => {
+      if (!state.active || layoutEpoch !== state.applyEpoch || !state.root) return;
       state.primaryScroller = container.querySelector(`.splitstream-scroll-primary`);
+      if (!state.primaryScroller) return;
       if (state.primaryScroller) {
         state.primaryScroller.scrollTop = 0;
         state.primaryScroller.addEventListener("scroll", onPrimaryScroll, { passive: true });
