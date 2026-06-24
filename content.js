@@ -14,6 +14,7 @@
     panes: [],
     wheelHandler: null,
     resizeHandler: null,
+    rafSyncId: null,
     styleEl: null,
     primaryScroller: null,
     syncingFromPrimary: false,
@@ -109,7 +110,7 @@
         width: 100% !important;
         min-width: 0 !important;
         min-height: 0 !important;
-        transform: translateY(0px) !important;
+        transform: translateY(0px);
         will-change: transform !important;
       }
 
@@ -227,6 +228,23 @@
     state.syncingFromPrimary = false;
   }
 
+  function syncLoop() {
+    if (!state.active || !state.primaryScroller) {
+      state.rafSyncId = null;
+      return;
+    }
+
+    clampBaseScroll();
+    const next = clamp(state.primaryScroller.scrollTop, 0, state.maxBaseScroll);
+    if (next !== state.scrollBase) {
+      state.scrollBase = next;
+      state.syncingFromPrimary = true;
+      applySyncedScroll();
+      state.syncingFromPrimary = false;
+    }
+    state.rafSyncId = requestAnimationFrame(syncLoop);
+  }
+
   function onWheel(event) {
     if (!state.active || !state.primaryScroller) return;
     if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
@@ -268,6 +286,11 @@
 
     state.resizeHandler = () => updateGeometry();
     window.addEventListener("resize", state.resizeHandler);
+    if (state.rafSyncId) {
+      cancelAnimationFrame(state.rafSyncId);
+      state.rafSyncId = null;
+    }
+    state.rafSyncId = requestAnimationFrame(syncLoop);
   }
 
   function removeSyncHandlers() {
@@ -282,6 +305,10 @@
     if (state.resizeHandler) {
       window.removeEventListener("resize", state.resizeHandler);
       state.resizeHandler = null;
+    }
+    if (state.rafSyncId) {
+      cancelAnimationFrame(state.rafSyncId);
+      state.rafSyncId = null;
     }
   }
 
