@@ -1,171 +1,325 @@
-(function () {
-  const STYLE_ID = "splitstream-column-style";
-  const TAG_CLASS = "splitstream-root";
+(() => {
+  const STYLE_ID = "splitstream-snake-style";
+  const ROOT_CLASS = "splitstream-root";
+  const BODY_CLASS = "splitstream-root-active";
   const SIDE_PADDING_PX = 30;
   const SEPARATOR_PX = 4;
 
-  let wheelHandler = null;
-  let activeColumns = 2;
+  const state = {
+    active: false,
+    columns: 2,
+    scrollBase: 0,
+    viewportHeight: 0,
+    maxBaseScroll: 0,
+    singleMaxScroll: 0,
+    root: null,
+    panes: [],
+    wheelHandler: null,
+    resizeHandler: null,
+    styleEl: null,
+    savedBodyHTML: "",
+    savedBodyClassName: "",
+    savedBodyStyle: "",
+  };
 
   function clamp(value, min, max) {
-    if (value === null || value === undefined || Number.isNaN(value)) return 0;
+    if (!Number.isFinite(value)) return min;
     return Math.min(Math.max(value, min), max);
   }
 
-  function getScrollRoot() {
-    const body = document.body;
-    if (body && body.scrollHeight > body.clientHeight + 1) {
-      return body;
-    }
-    return document.scrollingElement || document.documentElement || body;
-  }
-
-  function applyStyles(columns) {
-    let style = document.getElementById(STYLE_ID);
-    if (!style) {
-      style = document.createElement("style");
-      style.id = STYLE_ID;
-      style.type = "text/css";
-      document.head.appendChild(style);
-    }
-
-    style.textContent = `
-      html.${TAG_CLASS},
-      body.${TAG_CLASS} {
+  function setStyle() {
+    if (state.styleEl) return;
+    const styleEl = document.createElement("style");
+    styleEl.id = STYLE_ID;
+    document.documentElement.appendChild(styleEl);
+    styleEl.textContent = `
+      html, body {
         margin: 0 !important;
+      }
+
+      .${ROOT_CLASS} {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        display: flex !important;
+        align-items: stretch !important;
+        box-sizing: border-box !important;
+        padding: 0 ${SIDE_PADDING_PX}px !important;
+        gap: ${SEPARATOR_PX}px !important;
+        overflow: hidden !important;
+        background: transparent !important;
+      }
+
+      .${ROOT_CLASS} .splitstream-column {
+        position: relative !important;
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        max-width: 0 !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+        background: transparent !important;
+      }
+
+      .${ROOT_CLASS} .splitstream-separator {
+        width: ${SEPARATOR_PX}px !important;
+        min-width: ${SEPARATOR_PX}px !important;
+        max-width: ${SEPARATOR_PX}px !important;
+        align-self: stretch !important;
+        background: rgba(148, 163, 184, 0.35) !important;
+      }
+
+      .${ROOT_CLASS} .splitstream-scroll {
+        position: absolute !important;
+        inset: 0 !important;
+        overflow: hidden !important;
         width: 100% !important;
+        height: 100% !important;
+      }
+
+      .${ROOT_CLASS} .splitstream-scroll > * {
+        margin: 0 !important;
+        width: auto !important;
+        min-width: 0 !important;
         max-width: none !important;
         box-sizing: border-box !important;
       }
 
-      html.${TAG_CLASS} {
+      .${ROOT_CLASS} .splitstream-scroll body {
+        margin: 0 !important;
         padding: 0 !important;
         width: 100% !important;
-        min-width: 100% !important;
-        height: 100vh !important;
-        overflow-x: hidden !important;
-        overflow-y: hidden !important;
-      }
-
-      body.${TAG_CLASS} {
-        padding-left: ${SIDE_PADDING_PX}px !important;
-        padding-right: ${SIDE_PADDING_PX}px !important;
-        width: 100% !important;
-        height: 100vh !important;
-        overflow-x: hidden !important;
-        overflow-y: auto !important;
-        -webkit-column-count: ${columns} !important;
-        column-count: ${columns} !important;
-        -webkit-column-fill: auto !important;
-        column-fill: auto !important;
-        -webkit-column-gap: ${SEPARATOR_PX}px !important;
-        column-gap: ${SEPARATOR_PX}px !important;
-        -webkit-column-rule: ${SEPARATOR_PX}px solid rgba(148, 163, 184, 0.35) !important;
-        column-rule: ${SEPARATOR_PX}px solid rgba(148, 163, 184, 0.35) !important;
-        box-sizing: border-box !important;
-        background: transparent !important;
-      }
-
-      body.${TAG_CLASS} > * {
-        max-width: 100% !important;
-        width: auto !important;
-        min-width: 0 !important;
+        min-height: 0 !important;
         box-sizing: border-box !important;
       }
 
-      body.${TAG_CLASS} img,
-      body.${TAG_CLASS} video,
-      body.${TAG_CLASS} iframe,
-      body.${TAG_CLASS} canvas {
+      .${ROOT_CLASS} .splitstream-scroll img,
+      .${ROOT_CLASS} .splitstream-scroll video,
+      .${ROOT_CLASS} .splitstream-scroll iframe,
+      .${ROOT_CLASS} .splitstream-scroll canvas {
         max-width: 100% !important;
         height: auto !important;
       }
     `;
+    state.styleEl = styleEl;
   }
 
-  function clearStyles() {
-    const style = document.getElementById(STYLE_ID);
-    if (style) style.textContent = "";
-
-    const root = document.documentElement;
-    const body = document.body;
-    if (root) root.classList.remove(TAG_CLASS);
-    if (body) body.classList.remove(TAG_CLASS);
-
-    if (wheelHandler) {
-      window.removeEventListener("wheel", wheelHandler, { capture: true });
-      wheelHandler = null;
-    }
+  function removeStyle() {
+    if (!state.styleEl) return;
+    state.styleEl.remove();
+    state.styleEl = null;
   }
 
-  function syncWheelToRoot() {
-    if (wheelHandler) {
-      window.removeEventListener("wheel", wheelHandler, { capture: true });
-      wheelHandler = null;
-    }
+  function isScrollElement(el) {
+    return el && el.nodeType === Node.ELEMENT_NODE && el.classList && el.classList.contains("splitstream-scroll");
+  }
 
-    const root = getScrollRoot();
-    if (!root || !root.scrollTo) {
-      return;
-    }
-
-    const applyScroll = (deltaY) => {
-      const max = Math.max(0, root.scrollHeight - root.clientHeight);
-      if (max <= 1) return;
-      const next = clamp(root.scrollTop + deltaY, 0, max);
-      root.scrollTop = next;
-      document.body.scrollTop = next;
-      document.documentElement.scrollTop = next;
-    };
-
-    wheelHandler = (event) => {
-      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-      if (!event.deltaY) return;
-      event.preventDefault();
-      applyScroll(event.deltaY);
-    };
-
-    window.addEventListener("wheel", wheelHandler, {
-      capture: true,
-      passive: false,
+  function removeBlockedNodes(root) {
+    const blocked = root.querySelectorAll("script, noscript");
+    blocked.forEach((item) => {
+      item.remove();
     });
   }
 
-  function applyColumns(columns) {
-    activeColumns = Number(columns) || 2;
-    const root = document.documentElement;
-    const body = document.body;
-    if (!root || !body) return;
+  function createColumn(index) {
+    const column = document.createElement("div");
+    column.className = "splitstream-column";
 
-    root.classList.add(TAG_CLASS);
-    body.classList.add(TAG_CLASS);
+    const scroller = document.createElement("div");
+    scroller.className = "splitstream-scroll";
+    scroller.setAttribute("data-splitstream-column", String(index));
 
-    applyStyles(activeColumns);
-    syncWheelToRoot();
+    const clone = document.body.cloneNode(true);
+    removeBlockedNodes(clone);
+    clone.style.margin = "0 !important";
+    clone.style.padding = "0 !important";
+    scroller.appendChild(clone);
+    column.appendChild(scroller);
+    state.panes.push({ column, scroller });
+
+    return column;
   }
 
-  function clearColumns() {
-    clearStyles();
+  function clampBaseScroll() {
+    const maxScroll = Math.max(
+      0,
+      state.singleMaxScroll - (state.columns - 1) * state.viewportHeight
+    );
+    state.maxBaseScroll = clamp(state.maxBaseScroll, 0, maxScroll);
+    state.scrollBase = clamp(state.scrollBase, 0, maxScroll);
+    if (state.maxBaseScroll !== maxScroll) {
+      state.maxBaseScroll = maxScroll;
+    }
+  }
+
+  function applySyncedScroll() {
+    state.panes.forEach((pane, index) => {
+      const target = clamp(
+        state.scrollBase + index * state.viewportHeight,
+        0,
+        state.singleMaxScroll
+      );
+      pane.scroller.scrollTop = target;
+    });
+  }
+
+  function updateGeometry() {
+    if (!state.active) return;
+    state.viewportHeight = window.innerHeight;
+    state.singleMaxScroll = 0;
+    if (!state.panes.length || !state.panes[0].scroller.firstElementChild) return;
+    const ref = state.panes[0].scroller.firstElementChild;
+    state.singleMaxScroll = Math.max(0, ref.scrollHeight - state.viewportHeight);
+    clampBaseScroll();
+    applySyncedScroll();
+  }
+
+  function onWheel(event) {
+    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+    if (!event.deltaY) return;
+    event.preventDefault();
+    const next = clamp(state.scrollBase + event.deltaY, 0, state.maxBaseScroll);
+    if (next === state.scrollBase) return;
+    state.scrollBase = next;
+    applySyncedScroll();
+  }
+
+  function activateScrollSync() {
+    if (state.wheelHandler) {
+      window.removeEventListener("wheel", state.wheelHandler, { capture: true });
+    }
+    if (state.resizeHandler) {
+      window.removeEventListener("resize", state.resizeHandler);
+    }
+
+    state.wheelHandler = onWheel;
+    window.addEventListener("wheel", state.wheelHandler, { capture: true, passive: false });
+
+    state.resizeHandler = () => {
+      updateGeometry();
+    };
+    window.addEventListener("resize", state.resizeHandler);
+  }
+
+  function disableScrollSync() {
+    if (state.wheelHandler) {
+      window.removeEventListener("wheel", state.wheelHandler, { capture: true });
+    }
+    if (state.resizeHandler) {
+      window.removeEventListener("resize", state.resizeHandler);
+    }
+    state.wheelHandler = null;
+    state.resizeHandler = null;
+  }
+
+  function clearSplit() {
+    disableScrollSync();
+    removeStyle();
+
+    if (state.root) {
+      state.root.remove();
+    }
+    state.root = null;
+    state.panes = [];
+    state.active = false;
+    state.scrollBase = 0;
+    state.viewportHeight = 0;
+    state.maxBaseScroll = 0;
+    state.singleMaxScroll = 0;
+
+    const body = document.body;
+    if (body) {
+      body.classList.remove(BODY_CLASS);
+      body.innerHTML = state.savedBodyHTML;
+      body.className = state.savedBodyClassName;
+      if (state.savedBodyStyle) {
+        body.setAttribute("style", state.savedBodyStyle);
+      } else {
+        body.removeAttribute("style");
+      }
+    }
+    const root = document.documentElement;
+    if (root) {
+      root.classList.remove(ROOT_CLASS);
+    }
+  }
+
+  function applySplit(columns) {
+    const body = document.body;
+    const rootEl = document.documentElement;
+    if (!body || !rootEl) return;
+
+    clearSplit();
+
+    state.savedBodyHTML = body.innerHTML;
+    state.savedBodyClassName = body.className || "";
+    state.savedBodyStyle = body.getAttribute("style") || "";
+
+    state.columns = Number(columns) || 2;
+    state.active = true;
+    state.scrollBase = 0;
+
+    setStyle();
+
+    rootEl.classList.add(ROOT_CLASS);
+    body.classList.add(BODY_CLASS);
+
+    const container = document.createElement("div");
+    container.className = ROOT_CLASS;
+
+    for (let i = 0; i < state.columns; i++) {
+      if (i > 0) {
+        const separator = document.createElement("div");
+        separator.className = "splitstream-separator";
+        container.appendChild(separator);
+      }
+      container.appendChild(createColumn(i));
+    }
+
+    body.innerHTML = "";
+    body.appendChild(container);
+
+    requestAnimationFrame(() => {
+      updateGeometry();
+      applyScrollSync();
+    });
+
+    activateScrollSync();
+    updateGeometry();
+  }
+
+  function applyScrollSync() {
+    if (!state.active) return;
+    const reference = state.panes.length ? state.panes[0].scroller : null;
+    if (!reference || !reference.firstElementChild) {
+      return;
+    }
+    state.viewportHeight = window.innerHeight;
+    state.singleMaxScroll = Math.max(0, reference.firstElementChild.scrollHeight - state.viewportHeight);
+    state.maxBaseScroll = Math.max(
+      0,
+      state.singleMaxScroll - (state.columns - 1) * state.viewportHeight
+    );
+    applySyncedScroll();
   }
 
   chrome.runtime.sendMessage({ type: "get-columns" }, (response) => {
     const columns = response && Number(response.columns) ? Number(response.columns) : 2;
     if (columns === 1) {
-      clearColumns();
+      clearSplit();
       return;
     }
-    applyColumns(columns);
+    applySplit(columns);
   });
 
   chrome.runtime.onMessage.addListener((message) => {
     if (!message || !message.type) return;
     if (message.type === "apply-columns") {
       if (!message.shouldApply || message.columns === 1) {
-        clearColumns();
+        clearSplit();
       } else {
-        applyColumns(message.columns);
+        applySplit(message.columns);
       }
-      return;
     }
   });
 })();
