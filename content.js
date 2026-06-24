@@ -51,11 +51,18 @@
         background: transparent !important;
       }
 
+      .${BODY_CLASS} {
+        width: 100vw !important;
+        height: 100vh !important;
+        overflow: hidden !important;
+        padding: 0 !important;
+      }
+
       .${ROOT_CLASS} .splitstream-column {
         position: relative !important;
         flex: 1 1 0 !important;
         min-width: 0 !important;
-        max-width: 0 !important;
+        max-width: none !important;
         min-height: 0 !important;
         overflow: hidden !important;
         background: transparent !important;
@@ -131,8 +138,7 @@
 
     const clone = document.body.cloneNode(true);
     removeBlockedNodes(clone);
-    clone.style.margin = "0 !important";
-    clone.style.padding = "0 !important";
+    clone.setAttribute("style", "margin:0 !important;padding:0 !important;");
     scroller.appendChild(clone);
     column.appendChild(scroller);
     state.panes.push({ column, scroller });
@@ -216,10 +222,15 @@
     disableScrollSync();
     removeStyle();
 
-    if (state.root) {
-      state.root.remove();
+    if (!state.active) {
+      state.panes = [];
+      state.maxBaseScroll = 0;
+      state.singleMaxScroll = 0;
+      state.scrollBase = 0;
+      state.viewportHeight = 0;
+      return;
     }
-    state.root = null;
+
     state.panes = [];
     state.active = false;
     state.scrollBase = 0;
@@ -238,22 +249,32 @@
         body.removeAttribute("style");
       }
     }
-    const root = document.documentElement;
-    if (root) {
-      root.classList.remove(ROOT_CLASS);
-    }
+    // no additional root cleanup required
   }
 
   function applySplit(columns) {
     const body = document.body;
-    const rootEl = document.documentElement;
-    if (!body || !rootEl) return;
+    if (!body) return;
 
-    clearSplit();
+    const originalHTML = body.innerHTML;
+    const originalClass = body.className || "";
+    const originalStyle = body.getAttribute("style") || "";
 
-    state.savedBodyHTML = body.innerHTML;
-    state.savedBodyClassName = body.className || "";
-    state.savedBodyStyle = body.getAttribute("style") || "";
+    if (state.active) {
+      clearSplit();
+    } else {
+      disableScrollSync();
+      removeStyle();
+      state.panes = [];
+      state.maxBaseScroll = 0;
+      state.singleMaxScroll = 0;
+      state.scrollBase = 0;
+      state.viewportHeight = 0;
+    }
+
+    state.savedBodyHTML = originalHTML;
+    state.savedBodyClassName = originalClass;
+    state.savedBodyStyle = originalStyle;
 
     state.columns = Number(columns) || 2;
     state.active = true;
@@ -261,7 +282,6 @@
 
     setStyle();
 
-    rootEl.classList.add(ROOT_CLASS);
     body.classList.add(BODY_CLASS);
 
     const container = document.createElement("div");
