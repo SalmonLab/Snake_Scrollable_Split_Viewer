@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
   const STYLE_ID = "splitstream-snake-style";
   const ROOT_CLASS = "splitstream-root";
   const BODY_CLASS = "splitstream-root-active";
@@ -11,14 +11,12 @@
     scrollBase: 0,
     viewportHeight: 0,
     maxBaseScroll: 0,
-    singleMaxScroll: 0,
-    root: null,
     panes: [],
     wheelHandler: null,
     resizeHandler: null,
     styleEl: null,
-    syncingFromPrimary: false,
     primaryScroller: null,
+    syncingFromPrimary: false,
     savedBodyHTML: "",
     savedBodyClassName: "",
     savedBodyStyle: "",
@@ -31,6 +29,7 @@
 
   function setStyle() {
     if (state.styleEl) return;
+
     const styleEl = document.createElement("style");
     styleEl.id = STYLE_ID;
     document.documentElement.appendChild(styleEl);
@@ -64,10 +63,8 @@
         position: relative !important;
         flex: 1 1 0 !important;
         min-width: 0 !important;
-        max-width: none !important;
         min-height: 0 !important;
         overflow: hidden !important;
-        background: transparent !important;
       }
 
       .${ROOT_CLASS} .splitstream-separator {
@@ -79,25 +76,18 @@
       }
 
       .${ROOT_CLASS} .splitstream-scroll {
-        position: absolute !important;
-        inset: 0 !important;
-        overflow-y: hidden !important;
-        overflow-x: hidden !important;
+        position: relative !important;
         width: 100% !important;
         height: 100% !important;
-      }
-
-      .${ROOT_CLASS} .splitstream-scroll-primary {
         overflow-y: auto !important;
-      }
-
-      .${ROOT_CLASS} .splitstream-scroll-primary::-webkit-scrollbar {
-        width: 8px !important;
-        height: 8px !important;
+        overflow-x: hidden !important;
+        box-sizing: border-box !important;
       }
 
       .${ROOT_CLASS} .splitstream-scroll:not(.splitstream-scroll-primary) {
-        scrollbar-width: none !important;
+        overflow-y: hidden !important;
+        overflow-x: hidden !important;
+        pointer-events: none !important;
       }
 
       .${ROOT_CLASS} .splitstream-scroll:not(.splitstream-scroll-primary)::-webkit-scrollbar {
@@ -105,28 +95,46 @@
         height: 0 !important;
       }
 
-      .${ROOT_CLASS} .splitstream-scroll > * {
-        margin: 0 !important;
-        width: auto !important;
-        min-width: 0 !important;
-        max-width: none !important;
-        box-sizing: border-box !important;
+      .${ROOT_CLASS} .splitstream-scroll-primary::-webkit-scrollbar {
+        width: 8px !important;
+        height: 8px !important;
       }
 
-      .${ROOT_CLASS} .splitstream-scroll body {
+      .${ROOT_CLASS} .splitstream-scroll-primary {
+        scrollbar-width: thin !important;
+      }
+
+      .${ROOT_CLASS} .splitstream-pane-inner {
+        position: relative !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        transform: translateY(0px) !important;
+        will-change: transform !important;
+      }
+
+      .${ROOT_CLASS} .splitstream-pane-clone {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
         margin: 0 !important;
         padding: 0 !important;
-        width: 100% !important;
-        min-height: 0 !important;
         box-sizing: border-box !important;
       }
 
-      .${ROOT_CLASS} .splitstream-scroll img,
-      .${ROOT_CLASS} .splitstream-scroll video,
-      .${ROOT_CLASS} .splitstream-scroll iframe,
-      .${ROOT_CLASS} .splitstream-scroll canvas {
+      .${ROOT_CLASS} .splitstream-pane-clone img,
+      .${ROOT_CLASS} .splitstream-pane-clone video,
+      .${ROOT_CLASS} .splitstream-pane-clone iframe,
+      .${ROOT_CLASS} .splitstream-pane-clone canvas {
         max-width: 100% !important;
         height: auto !important;
+      }
+
+      .${ROOT_CLASS} .splitstream-pane-clone * {
+        max-width: 100% !important;
+        width: auto !important;
+        min-width: 0 !important;
+        box-sizing: border-box !important;
       }
     `;
     state.styleEl = styleEl;
@@ -140,14 +148,12 @@
 
   function removeBlockedNodes(root) {
     const blocked = root.querySelectorAll("script, noscript");
-    blocked.forEach((item) => {
-      item.remove();
-    });
+    blocked.forEach((item) => item.remove());
   }
 
   function createClonedContent() {
     const clone = document.createElement("div");
-    clone.className = "splitstream-cloned-body";
+    clone.className = "splitstream-pane-clone";
 
     const bodyAttributes = document.body.attributes;
     for (let i = 0; i < bodyAttributes.length; i++) {
@@ -161,7 +167,7 @@
       }
     }
 
-    clone.setAttribute("style", "margin:0 !important;padding:0 !important;");
+    clone.setAttribute("style", "margin:0 !important;padding:0 !important;display:block !important;");
 
     Array.from(document.body.childNodes).forEach((node) => {
       clone.appendChild(node.cloneNode(true));
@@ -182,74 +188,74 @@
     }
     scroller.setAttribute("data-splitstream-column", String(index));
 
-    const clone = createClonedContent();
     const inner = document.createElement("div");
     inner.className = "splitstream-pane-inner";
-    inner.appendChild(clone);
-    state.panes.push({ column, scroller, inner });
+    inner.appendChild(createClonedContent());
+
     scroller.appendChild(inner);
     column.appendChild(scroller);
 
+    state.panes.push({ column, scroller, inner, index });
     return column;
+  }
+
+  function applySyncedScroll() {
+    if (!state.active || !state.primaryScroller) return;
+
+    const clamped = clamp(state.scrollBase, 0, state.maxBaseScroll);
+    state.scrollBase = clamped;
+
+    state.panes.forEach((pane) => {
+      const targetOffset = pane.index === 0 ? 0 : -(state.scrollBase + pane.index * state.viewportHeight);
+      pane.inner.style.transform = `translateY(${targetOffset}px)`;
+    });
+
+    if (!state.syncingFromPrimary) {
+      state.primaryScroller.scrollTop = clamped;
+    }
   }
 
   function onPrimaryScroll() {
     if (!state.active || !state.primaryScroller || state.syncingFromPrimary) return;
+
     const next = clamp(state.primaryScroller.scrollTop, 0, state.maxBaseScroll);
     if (next === state.scrollBase) return;
+
     state.scrollBase = next;
     state.syncingFromPrimary = true;
     applySyncedScroll();
     state.syncingFromPrimary = false;
   }
 
-  function clampBaseScroll() {
-    const maxScroll = Math.max(0, state.singleMaxScroll);
-    state.maxBaseScroll = clamp(state.maxBaseScroll, 0, maxScroll);
-    state.scrollBase = clamp(state.scrollBase, 0, maxScroll);
-    if (state.maxBaseScroll !== maxScroll) {
-      state.maxBaseScroll = maxScroll;
-    }
-  }
-
-  function applySyncedScroll() {
-    state.panes.forEach((pane, index) => {
-      const paneMax = Math.max(0, pane.scroller.scrollHeight - pane.scroller.clientHeight);
-      const target = clamp(
-        state.scrollBase + index * state.viewportHeight,
-        0,
-        paneMax
-      );
-      pane.scroller.scrollTop = target;
-    });
-
-    if (state.primaryScroller) {
-      state.primaryScroller.scrollTop = clamp(state.scrollBase, 0, state.maxBaseScroll);
-    }
-  }
-
-  function updateGeometry() {
-    if (!state.active) return;
-    state.viewportHeight = window.innerHeight;
-    state.singleMaxScroll = 0;
-    if (!state.panes.length || !state.panes[0].inner) return;
-    const ref = state.panes[0].inner.lastElementChild;
-    if (!ref) return;
-    state.singleMaxScroll = Math.max(0, ref.scrollHeight - state.viewportHeight);
-    clampBaseScroll();
-    applySyncedScroll();
-  }
-
   function onWheel(event) {
-    if (!state.active || !state.primaryScroller || state.syncingFromPrimary) return;
+    if (!state.active || !state.primaryScroller) return;
     if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
     if (!event.deltaY) return;
+
     event.preventDefault();
-    const next = clamp(state.primaryScroller.scrollTop + event.deltaY, 0, state.maxBaseScroll);
+    const next = clamp(
+      state.primaryScroller.scrollTop + event.deltaY,
+      0,
+      state.maxBaseScroll
+    );
     state.primaryScroller.scrollTop = next;
+    onPrimaryScroll();
   }
 
-  function activateScrollSync() {
+  function clampBaseScroll() {
+    if (!state.primaryScroller) {
+      state.maxBaseScroll = 0;
+      state.scrollBase = 0;
+      return;
+    }
+
+    const contentMax = Math.max(0, state.primaryScroller.scrollHeight - state.primaryScroller.clientHeight);
+    state.maxBaseScroll = clamp(contentMax, 0, contentMax);
+    state.scrollBase = clamp(state.scrollBase, 0, state.maxBaseScroll);
+    state.primaryScroller.scrollTop = clamp(state.primaryScroller.scrollTop, 0, state.maxBaseScroll);
+  }
+
+  function activateSyncHandlers() {
     if (state.wheelHandler) {
       window.removeEventListener("wheel", state.wheelHandler, { capture: true });
     }
@@ -260,13 +266,11 @@
     state.wheelHandler = onWheel;
     window.addEventListener("wheel", state.wheelHandler, { capture: true, passive: false });
 
-    state.resizeHandler = () => {
-      updateGeometry();
-    };
+    state.resizeHandler = () => updateGeometry();
     window.addEventListener("resize", state.resizeHandler);
   }
 
-  function disableScrollSync() {
+  function removeSyncHandlers() {
     if (state.primaryScroller) {
       state.primaryScroller.removeEventListener("scroll", onPrimaryScroll);
       state.primaryScroller = null;
@@ -277,30 +281,27 @@
     }
     if (state.resizeHandler) {
       window.removeEventListener("resize", state.resizeHandler);
+      state.resizeHandler = null;
     }
-    state.resizeHandler = null;
   }
 
   function clearSplit() {
-    disableScrollSync();
+    removeSyncHandlers();
     removeStyle();
 
     if (!state.active) {
       state.panes = [];
       state.maxBaseScroll = 0;
-      state.singleMaxScroll = 0;
-      state.scrollBase = 0;
       state.viewportHeight = 0;
+      state.scrollBase = 0;
       return;
     }
 
     state.panes = [];
-    state.primaryScroller = null;
-    state.active = false;
     state.scrollBase = 0;
     state.viewportHeight = 0;
     state.maxBaseScroll = 0;
-    state.singleMaxScroll = 0;
+    state.active = false;
 
     const body = document.body;
     if (body) {
@@ -313,7 +314,15 @@
         body.removeAttribute("style");
       }
     }
-    // no additional root cleanup required
+  }
+
+  function updateGeometry() {
+    if (!state.active || !state.primaryScroller) return;
+    state.viewportHeight = window.innerHeight;
+    clampBaseScroll();
+    state.syncingFromPrimary = true;
+    applySyncedScroll();
+    state.syncingFromPrimary = false;
   }
 
   function applySplit(columns) {
@@ -327,11 +336,10 @@
     if (state.active) {
       clearSplit();
     } else {
-      disableScrollSync();
+      removeSyncHandlers();
       removeStyle();
       state.panes = [];
       state.maxBaseScroll = 0;
-      state.singleMaxScroll = 0;
       state.scrollBase = 0;
       state.viewportHeight = 0;
     }
@@ -345,7 +353,6 @@
     state.scrollBase = 0;
 
     setStyle();
-
     body.classList.add(BODY_CLASS);
 
     const container = document.createElement("div");
@@ -364,30 +371,14 @@
     body.appendChild(container);
 
     requestAnimationFrame(() => {
+      state.primaryScroller = container.querySelector(`.splitstream-scroll-primary`);
+      if (state.primaryScroller) {
+        state.primaryScroller.scrollTop = 0;
+        state.primaryScroller.addEventListener("scroll", onPrimaryScroll, { passive: true });
+      }
       updateGeometry();
-      applyScrollSync();
+      activateSyncHandlers();
     });
-
-    state.primaryScroller = document.querySelector(`.${ROOT_CLASS} .splitstream-scroll-primary`);
-    if (state.primaryScroller) {
-      state.primaryScroller.scrollTop = 0;
-      state.primaryScroller.addEventListener("scroll", onPrimaryScroll, { passive: true });
-    }
-
-    activateScrollSync();
-    updateGeometry();
-  }
-
-  function applyScrollSync() {
-    if (!state.active) return;
-    const reference = state.panes.length ? state.panes[0].inner : null;
-    if (!reference || !reference.firstElementChild) {
-      return;
-    }
-    state.viewportHeight = window.innerHeight;
-    state.singleMaxScroll = Math.max(0, reference.firstElementChild.scrollHeight - state.viewportHeight);
-    state.maxBaseScroll = Math.max(0, state.singleMaxScroll);
-    applySyncedScroll();
   }
 
   chrome.runtime.sendMessage({ type: "get-columns" }, (response) => {
@@ -410,4 +401,3 @@
     }
   });
 })();
-
