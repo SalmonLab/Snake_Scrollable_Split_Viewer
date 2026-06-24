@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "SplitStream Browser",
+  "version": "0.1.0",
+  "description": "Display one page as synchronized multi-column flow (2 or 3 columns).",
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_title": "SplitStream",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
