@@ -17,6 +17,8 @@
     wheelHandler: null,
     resizeHandler: null,
     styleEl: null,
+    syncingFromPrimary: false,
+    primaryScroller: null,
     savedBodyHTML: "",
     savedBodyClassName: "",
     savedBodyStyle: "",
@@ -79,9 +81,28 @@
       .${ROOT_CLASS} .splitstream-scroll {
         position: absolute !important;
         inset: 0 !important;
-        overflow: hidden !important;
+        overflow-y: hidden !important;
+        overflow-x: hidden !important;
         width: 100% !important;
         height: 100% !important;
+      }
+
+      .${ROOT_CLASS} .splitstream-scroll-primary {
+        overflow-y: auto !important;
+      }
+
+      .${ROOT_CLASS} .splitstream-scroll-primary::-webkit-scrollbar {
+        width: 8px !important;
+        height: 8px !important;
+      }
+
+      .${ROOT_CLASS} .splitstream-scroll:not(.splitstream-scroll-primary) {
+        scrollbar-width: none !important;
+      }
+
+      .${ROOT_CLASS} .splitstream-scroll:not(.splitstream-scroll-primary)::-webkit-scrollbar {
+        width: 0 !important;
+        height: 0 !important;
       }
 
       .${ROOT_CLASS} .splitstream-scroll > * {
@@ -117,10 +138,6 @@
     state.styleEl = null;
   }
 
-  function isScrollElement(el) {
-    return el && el.nodeType === Node.ELEMENT_NODE && el.classList && el.classList.contains("splitstream-scroll");
-  }
-
   function removeBlockedNodes(root) {
     const blocked = root.querySelectorAll("script, noscript");
     blocked.forEach((item) => {
@@ -134,22 +151,45 @@
 
     const scroller = document.createElement("div");
     scroller.className = "splitstream-scroll";
+    if (index === 0) {
+      scroller.className += " splitstream-scroll-primary";
+    }
     scroller.setAttribute("data-splitstream-column", String(index));
 
     const clone = document.body.cloneNode(true);
     removeBlockedNodes(clone);
     clone.setAttribute("style", "margin:0 !important;padding:0 !important;");
-    scroller.appendChild(clone);
+    const inner = document.createElement("div");
+    inner.className = "splitstream-pane-inner";
+    inner.appendChild(clone);
+    if (index === 0) {
+      const spacer = document.createElement("div");
+      spacer.className = "splitstream-tail-space";
+      inner.appendChild(spacer);
+      state.panes.push({ column, scroller, inner, spacer });
+    } else {
+      state.panes.push({ column, scroller, inner, spacer: null });
+    }
+    scroller.appendChild(inner);
     column.appendChild(scroller);
-    state.panes.push({ column, scroller });
 
     return column;
+  }
+
+  function onPrimaryScroll() {
+    if (!state.active || !state.primaryScroller || state.syncingFromPrimary) return;
+    const next = clamp(state.primaryScroller.scrollTop, 0, state.maxBaseScroll);
+    if (next === state.scrollBase) return;
+    state.scrollBase = next;
+    state.syncingFromPrimary = true;
+    applySyncedScroll();
+    state.syncingFromPrimary = false;
   }
 
   function clampBaseScroll() {
     const maxScroll = Math.max(
       0,
-      state.singleMaxScroll - (state.columns - 1) * state.viewportHeight
+      state.singleMaxScroll + (state.columns - 1) * state.viewportHeight
     );
     state.maxBaseScroll = clamp(state.maxBaseScroll, 0, maxScroll);
     state.scrollBase = clamp(state.scrollBase, 0, maxScroll);
@@ -160,34 +200,42 @@
 
   function applySyncedScroll() {
     state.panes.forEach((pane, index) => {
+      const paneMax = Math.max(0, pane.scroller.scrollHeight - pane.scroller.clientHeight);
       const target = clamp(
         state.scrollBase + index * state.viewportHeight,
         0,
-        state.singleMaxScroll
+        paneMax
       );
       pane.scroller.scrollTop = target;
     });
+
+    if (state.primaryScroller) {
+      state.primaryScroller.scrollTop = clamp(state.scrollBase, 0, state.maxBaseScroll);
+    }
   }
 
   function updateGeometry() {
     if (!state.active) return;
     state.viewportHeight = window.innerHeight;
     state.singleMaxScroll = 0;
-    if (!state.panes.length || !state.panes[0].scroller.firstElementChild) return;
-    const ref = state.panes[0].scroller.firstElementChild;
+    if (!state.panes.length || !state.panes[0].inner) return;
+    const ref = state.panes[0].inner.firstElementChild;
+    if (!ref) return;
     state.singleMaxScroll = Math.max(0, ref.scrollHeight - state.viewportHeight);
+    if (state.panes[0].spacer) {
+      state.panes[0].spacer.style.height = `${Math.max(0, (state.columns - 1) * state.viewportHeight)}px`;
+    }
     clampBaseScroll();
     applySyncedScroll();
   }
 
   function onWheel(event) {
+    if (!state.active || !state.primaryScroller || state.syncingFromPrimary) return;
     if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
     if (!event.deltaY) return;
     event.preventDefault();
-    const next = clamp(state.scrollBase + event.deltaY, 0, state.maxBaseScroll);
-    if (next === state.scrollBase) return;
-    state.scrollBase = next;
-    applySyncedScroll();
+    const next = clamp(state.primaryScroller.scrollTop + event.deltaY, 0, state.maxBaseScroll);
+    state.primaryScroller.scrollTop = next;
   }
 
   function activateScrollSync() {
@@ -208,13 +256,17 @@
   }
 
   function disableScrollSync() {
+    if (state.primaryScroller) {
+      state.primaryScroller.removeEventListener("scroll", onPrimaryScroll);
+      state.primaryScroller = null;
+    }
     if (state.wheelHandler) {
       window.removeEventListener("wheel", state.wheelHandler, { capture: true });
+      state.wheelHandler = null;
     }
     if (state.resizeHandler) {
       window.removeEventListener("resize", state.resizeHandler);
     }
-    state.wheelHandler = null;
     state.resizeHandler = null;
   }
 
@@ -232,6 +284,7 @@
     }
 
     state.panes = [];
+    state.primaryScroller = null;
     state.active = false;
     state.scrollBase = 0;
     state.viewportHeight = 0;
@@ -304,13 +357,19 @@
       applyScrollSync();
     });
 
+    state.primaryScroller = document.querySelector(`.${ROOT_CLASS} .splitstream-scroll-primary`);
+    if (state.primaryScroller) {
+      state.primaryScroller.scrollTop = 0;
+      state.primaryScroller.addEventListener("scroll", onPrimaryScroll, { passive: true });
+    }
+
     activateScrollSync();
     updateGeometry();
   }
 
   function applyScrollSync() {
     if (!state.active) return;
-    const reference = state.panes.length ? state.panes[0].scroller : null;
+    const reference = state.panes.length ? state.panes[0].inner : null;
     if (!reference || !reference.firstElementChild) {
       return;
     }
@@ -318,7 +377,7 @@
     state.singleMaxScroll = Math.max(0, reference.firstElementChild.scrollHeight - state.viewportHeight);
     state.maxBaseScroll = Math.max(
       0,
-      state.singleMaxScroll - (state.columns - 1) * state.viewportHeight
+      state.singleMaxScroll + (state.columns - 1) * state.viewportHeight
     );
     applySyncedScroll();
   }
