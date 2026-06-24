@@ -40,8 +40,8 @@
 
       html.${TAG_CLASS} {
         padding: 0 !important;
-        width: 100vw !important;
-        min-width: 100vw !important;
+        width: 100% !important;
+        min-width: 100% !important;
         height: 100vh !important;
         overflow-x: hidden !important;
         overflow-y: hidden !important;
@@ -50,8 +50,8 @@
       body.${TAG_CLASS} {
         padding-left: ${SIDE_PADDING_PX}px !important;
         padding-right: ${SIDE_PADDING_PX}px !important;
-        width: calc(100% - ${SIDE_PADDING_PX * 2}px) !important;
-        height: calc(100vh - ${SIDE_PADDING_PX * 2}px) !important;
+        width: 100% !important;
+        height: 100vh !important;
         overflow-x: hidden !important;
         overflow-y: auto !important;
         -webkit-column-count: ${columns} !important;
@@ -169,3 +169,4 @@
     }
   });
 })();
+
