@@ -39,22 +39,45 @@ function getCss(columns) {
     body.splitstream-root {
       padding-left: ${SIDE_PADDING_PX}px !important;
       padding-right: ${SIDE_PADDING_PX}px !important;
-      -webkit-column-count: ${columns} !important;
-      column-count: ${columns} !important;
-      -webkit-column-fill: auto !important;
-      column-fill: auto !important;
-      -webkit-column-gap: ${SEPARATOR_PX}px !important;
-      column-gap: ${SEPARATOR_PX}px !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      width: 100vw !important;
+      min-width: 100vw !important;
+    }
+
+      .splitstream-root .splitstream-target {
+        position: relative !important;
+        -webkit-column-count: ${columns} !important;
+        column-count: ${columns} !important;
+        -webkit-column-fill: auto !important;
+        column-fill: auto !important;
+        height: calc(100vh - ${SIDE_PADDING_PX * 2}px) !important;
+        -webkit-column-gap: ${SEPARATOR_PX}px !important;
+        column-gap: ${SEPARATOR_PX}px !important;
       -webkit-column-rule: ${SEPARATOR_PX}px solid rgba(148, 163, 184, 0.35) !important;
       column-rule: ${SEPARATOR_PX}px solid rgba(148, 163, 184, 0.35) !important;
+      width: calc(100% - ${SIDE_PADDING_PX * 2}px) !important;
+      max-width: none !important;
+      box-sizing: border-box !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+      padding-left: 0 !important;
+      padding-right: 0 !important;
       overflow-wrap: anywhere !important;
       min-height: 0 !important;
     }
 
-    body.splitstream-root img,
-    body.splitstream-root video,
-    body.splitstream-root iframe,
-    body.splitstream-root canvas {
+    .splitstream-root .splitstream-target * {
+      max-width: 100% !important;
+      width: 100% !important;
+      min-width: 0 !important;
+      overflow: visible !important;
+    }
+
+    .splitstream-root .splitstream-target img,
+    .splitstream-root .splitstream-target video,
+    .splitstream-root .splitstream-target iframe,
+    .splitstream-root .splitstream-target canvas {
       max-width: 100% !important;
       height: auto !important;
     }
