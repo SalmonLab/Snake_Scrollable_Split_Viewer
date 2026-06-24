@@ -4,6 +4,8 @@
   const BODY_CLASS = "splitstream-root-active";
   const SIDE_PADDING_PX = 30;
   const SEPARATOR_PX = 4;
+  const SHORTCUT_PREFIX_KEY = "s";
+  const SHORTCUT_TIMEOUT_MS = 450;
 
   const state = {
     active: false,
@@ -23,11 +25,73 @@
     savedBodyStyle: "",
     applyEpoch: 0,
     root: null,
+    shortcutPending: false,
+    shortcutResetTimer: null,
   };
 
   function clamp(value, min, max) {
     if (!Number.isFinite(value)) return min;
     return Math.min(Math.max(value, min), max);
+  }
+
+  function isEditableTarget(target) {
+    if (!target) return false;
+    if (target.isContentEditable) return true;
+    const node = target.closest ? target.closest("[contenteditable=''], [contenteditable='true']") : null;
+    if (node) return true;
+    const tag = target.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON";
+  }
+
+  function clearShortcutState() {
+    state.shortcutPending = false;
+    if (state.shortcutResetTimer) {
+      clearTimeout(state.shortcutResetTimer);
+      state.shortcutResetTimer = null;
+    }
+  }
+
+  function applyShortcutColumns(columns) {
+    const targetColumns = Number(columns);
+    const message = targetColumns === 1
+      ? { type: "clear-columns" }
+      : { type: "set-columns", columns: targetColumns };
+    chrome.runtime.sendMessage(message);
+  }
+
+  function onSplitstreamShortcutKeyDown(event) {
+    if (!event || event.defaultPrevented) return;
+    if (event.isComposing) return;
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    if (!event.key) return;
+
+    if (isEditableTarget(event.target)) {
+      clearShortcutState();
+      return;
+    }
+
+    const key = event.key.toLowerCase();
+
+    if (!state.shortcutPending) {
+      if (key === SHORTCUT_PREFIX_KEY) {
+        state.shortcutPending = true;
+        if (state.shortcutResetTimer) {
+          clearTimeout(state.shortcutResetTimer);
+        }
+        state.shortcutResetTimer = setTimeout(clearShortcutState, SHORTCUT_TIMEOUT_MS);
+      }
+      return;
+    }
+
+    if (key === "1" || key === "2" || key === "3") {
+      applyShortcutColumns(Number(key));
+      clearShortcutState();
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
+    clearShortcutState();
   }
 
   function setStyle() {
@@ -452,6 +516,8 @@
     }
     applySplit(columns);
   });
+
+  window.addEventListener("keydown", onSplitstreamShortcutKeyDown, { capture: true });
 
   chrome.runtime.onMessage.addListener((message) => {
     if (!message || !message.type) return;

@@ -13,10 +13,10 @@
 ## 使い方
 
 - ポップアップで `off / 2 columns / 3 columns` を選択して適用
-- 短絡のショートカット（未実装の場合は、拡張を再読み込み後に確認）
-  - `Shift+1`: off
-  - `Shift+2`: 2 columns
-  - `Shift+3`: 3 columns
+- 画面上で連続入力で切替
+  - `s` のあと `1`: off
+  - `s` のあと `2`: 2 columns
+  - `s` のあと `3`: 3 columns
 
 ## ワンクリック起動
 

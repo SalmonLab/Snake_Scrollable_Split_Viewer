@@ -14,29 +14,6 @@
     "default_title": "SplitStream",
     "default_popup": "popup.html"
   },
-  "commands": {
-    "toggle-split-off": {
-      "suggested_key": {
-        "default": "Shift+1",
-        "mac": "Shift+1"
-      },
-      "description": "SplitStream: Off"
-    },
-    "set-split-2": {
-      "suggested_key": {
-        "default": "Shift+2",
-        "mac": "Shift+2"
-      },
-      "description": "SplitStream: 2 columns"
-    },
-    "set-split-3": {
-      "suggested_key": {
-        "default": "Shift+3",
-        "mac": "Shift+3"
-      },
-      "description": "SplitStream: 3 columns"
-    }
-  },
   "background": {
     "service_worker": "background.js"
   },
