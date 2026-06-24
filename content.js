@@ -90,7 +90,6 @@
       .${ROOT_CLASS} .splitstream-scroll:not(.splitstream-scroll-primary) {
         overflow-y: hidden !important;
         overflow-x: hidden !important;
-        pointer-events: none !important;
       }
 
       .${ROOT_CLASS} .splitstream-scroll:not(.splitstream-scroll-primary)::-webkit-scrollbar {
@@ -203,10 +202,12 @@
 
     const clamped = clamp(state.scrollBase, 0, state.maxBaseScroll);
     state.scrollBase = clamped;
+    const contiguousOverlap = state.columns === 2 ? 1 : 0;
 
     state.panes.forEach((pane) => {
       const isPrimary = pane.index === (state.columns - 1);
-      const phase = pane.index * state.viewportHeight;
+      const overlap = pane.index > 0 ? contiguousOverlap : 0;
+      const phase = pane.index * state.viewportHeight - overlap;
       const targetOffset = isPrimary
         ? -phase
         : -state.scrollBase - phase;
