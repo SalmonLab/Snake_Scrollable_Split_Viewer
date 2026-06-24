@@ -17,7 +17,7 @@ async function loadCurrentSetting() {
   const response = await new Promise((resolve) =>
     chrome.runtime.sendMessage({ type: "get-columns", tabId: tab.id }, resolve)
   );
-  const columns = response && response.columns ? Number(response.columns) : 2;
+  const columns = response && Number(response.columns) === 2 ? 2 : 2;
   columnCountSelect.value = String(columns);
   statusEl.textContent = `current: ${columns} columns`;
 }
@@ -28,7 +28,7 @@ applyBtn.addEventListener("click", async () => {
     statusEl.textContent = "no active tab";
     return;
   }
-  const columns = Number(columnCountSelect.value);
+  const columns = 2;
   const response = await new Promise((resolve) => {
     chrome.runtime.sendMessage(
       {

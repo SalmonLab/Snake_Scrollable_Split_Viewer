@@ -8,6 +8,11 @@ function isValidTabId(tabId) {
   return Number.isInteger(tabId) && tabId >= 0;
 }
 
+function normalizeColumns(columns) {
+  const value = Number(columns);
+  return value === 2 ? 2 : DEFAULT_COLUMNS;
+}
+
 function getStorage() {
   return new Promise((resolve) => {
     chrome.storage.local.get([KEY_TAB_SETTINGS], (result) => resolve(result[KEY_TAB_SETTINGS] || {}));
@@ -85,11 +90,12 @@ function getCss(columns) {
 }
 
 async function applyToTab(tabId, columns) {
+  const nextColumns = normalizeColumns(columns);
   try {
     await chrome.tabs.sendMessage(tabId, {
       type: "apply-columns",
-      columns,
-      css: getCss(columns),
+      columns: nextColumns,
+      css: getCss(nextColumns),
       shouldApply: true
     });
   } catch {
@@ -99,9 +105,10 @@ async function applyToTab(tabId, columns) {
 
 async function updateTabSetting(tabId, columns) {
   const settings = await getStorage();
-  settings[tabId] = columns;
+  const nextColumns = normalizeColumns(columns);
+  settings[tabId] = nextColumns;
   await setStorage({ [KEY_TAB_SETTINGS]: settings });
-  await applyToTab(tabId, columns);
+  await applyToTab(tabId, nextColumns);
 }
 
 async function clearTabSetting(tabId) {
@@ -123,11 +130,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return;
   }
   const tabId = message.tabId || (sender && sender.tab && sender.tab.id);
-  const columns = Number(message.columns);
-  if (!isValidTabId(tabId) || (columns !== 2 && columns !== 3)) {
+  if (!isValidTabId(tabId)) {
     sendResponse({ ok: false, error: "invalid request" });
     return;
   }
+  const columns = normalizeColumns(message.columns);
   updateTabSetting(tabId, columns).then(() => {
     sendResponse({ ok: true, columns });
   });
@@ -158,7 +165,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
     const settings = await getStorage();
-    sendResponse({ columns: settings[tabId] || DEFAULT_COLUMNS });
+    sendResponse({ columns: normalizeColumns(settings[tabId] || DEFAULT_COLUMNS) });
   })();
   return true;
 });
