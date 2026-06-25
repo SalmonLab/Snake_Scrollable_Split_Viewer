@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "SplitStream Browser",
+  "name": "Snake-Scrollable Split Viewer",
   "version": "0.1.0",
-  "description": "Display one page as synchronized multi-column flow (2 or 3 columns).",
+  "description": "Snake-style synchronized multi-column scrolling for easier reading.",
   "permissions": [
     "storage",
     "tabs"
@@ -11,7 +11,7 @@
     "<all_urls>"
   ],
   "action": {
-    "default_title": "SplitStream",
+    "default_title": "Snake-Scrollable Split Viewer",
     "default_popup": "popup.html"
   },
   "background": {
