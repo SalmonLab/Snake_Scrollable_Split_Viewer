@@ -8,8 +8,7 @@
                         "tabs"
                     ],
     "host_permissions":  [
-                             "\u003call_urls\u003e"
-                         ],
+                             "http://*/*", "https://*/*"],
     "action":  {
                    "default_title":  "Snake-Scrollable Split Viewer",
                    "default_popup":  "popup.html"
@@ -20,8 +19,7 @@
     "content_scripts":  [
                             {
                                 "matches":  [
-                                                "\u003call_urls\u003e"
-                                            ],
+                                                "http://*/*", "https://*/*"],
                                 "js":  [
                                            "content.js"
                                        ],
@@ -35,3 +33,6 @@
                   "128":  "snake_scrollable_split_viewer_icons/snake_scrollable_split_viewer_icon_128x128.png"
               }
 }
+
+
+
