@@ -217,6 +217,43 @@
     blocked.forEach((item) => item.remove());
   }
 
+  function shouldRemoveNodeFromClone(node) {
+    if (!node || node.nodeType !== Node.ELEMENT_NODE) return false;
+
+    const pos = window.getComputedStyle(node).position;
+    if (pos === "fixed" || pos === "sticky") return true;
+
+    const role = node.getAttribute && node.getAttribute("role");
+    if (role && role.toLowerCase() === "complementary") return true;
+
+    return false;
+  }
+
+  function cloneNodeForPane(node) {
+    if (!node) return null;
+
+    if (node.nodeType === Node.TEXT_NODE || node.nodeType === Node.COMMENT_NODE) {
+      return node.cloneNode(true);
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return node.cloneNode(false);
+    }
+
+    if (shouldRemoveNodeFromClone(node)) {
+      return null;
+    }
+
+    const clone = node.cloneNode(false);
+    for (let i = 0; i < node.childNodes.length; i++) {
+      const childClone = cloneNodeForPane(node.childNodes[i]);
+      if (childClone) {
+        clone.appendChild(childClone);
+      }
+    }
+    return clone;
+  }
+
   function createClonedContent() {
     const clone = document.createElement("div");
     clone.className = "splitstream-pane-clone";
@@ -232,7 +269,10 @@
     clone.setAttribute("style", "margin:0 !important;padding:0 !important;display:block !important;");
 
     Array.from(document.body.childNodes).forEach((node) => {
-      clone.appendChild(node.cloneNode(true));
+      const nodeClone = cloneNodeForPane(node);
+      if (nodeClone) {
+        clone.appendChild(nodeClone);
+      }
     });
 
     removeBlockedNodes(clone);
