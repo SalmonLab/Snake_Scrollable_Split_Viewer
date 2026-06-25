@@ -18,7 +18,7 @@ async function loadCurrentSetting() {
     chrome.runtime.sendMessage({ type: "get-columns", tabId: tab.id }, resolve)
   );
   const columns = response && Number.isFinite(response.columns) ? Number(response.columns) : 1;
-  const normalizedColumns = (columns === 1 || columns === 2 || columns === 3) ? columns : 1;
+  const normalizedColumns = Number.isFinite(columns) && columns >= 1 && columns <= 5 ? columns : 1;
   columnCountSelect.value = String(normalizedColumns);
   statusEl.textContent = normalizedColumns === 1 ? "current: off" : `current: ${normalizedColumns} columns`;
 }

@@ -8,6 +8,11 @@ function isValidTabId(tabId) {
   return Number.isInteger(tabId) && tabId >= 0;
 }
 
+function isAllowedColumns(columns) {
+  const value = Number(columns);
+  return Number.isInteger(value) && value >= 2 && value <= 5;
+}
+
 function getStorage() {
   return new Promise((resolve) => {
     chrome.storage.local.get([KEY_TAB_SETTINGS], (result) => resolve(result[KEY_TAB_SETTINGS] || {}));
@@ -125,7 +130,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   const tabId = message.tabId || (sender && sender.tab && sender.tab.id);
   const columns = Number(message.columns);
-  if (!isValidTabId(tabId) || (columns !== 2 && columns !== 3)) {
+  if (!isValidTabId(tabId) || !isAllowedColumns(columns)) {
     sendResponse({ ok: false, error: "invalid request" });
     return;
   }

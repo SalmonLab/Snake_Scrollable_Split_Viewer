@@ -83,7 +83,7 @@
       return;
     }
 
-    if (key === "1" || key === "2" || key === "3") {
+    if (key === "1" || key === "2" || key === "3" || key === "4" || key === "5") {
       applyShortcutColumns(Number(key));
       clearShortcutState();
       event.preventDefault();
@@ -472,7 +472,7 @@
     const body = document.body;
     if (!body) return;
 
-    const nextColumns = Math.min(3, Math.max(2, Number(columns) || 2));
+    const nextColumns = Math.min(5, Math.max(2, Number(columns) || 2));
 
     if (
       state.active &&
